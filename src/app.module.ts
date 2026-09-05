@@ -3,12 +3,16 @@ import { MikroOrmModule } from '@mikro-orm/nestjs';
 import mikroOrmConfig from './database/mikro-orm.config.js';
 import { HealthController } from './health/health.controller.js';
 import { HealthService } from './health/health.service.js';
+import { WageringModule } from './wagering/wagering.module.js';
 
 @Module({
   imports:
     process.env.NODE_ENV === 'test'
       ? []
-      : [MikroOrmModule.forRoot({ ...mikroOrmConfig, autoLoadEntities: true })],
+      : [
+          MikroOrmModule.forRoot({ ...mikroOrmConfig, autoLoadEntities: true }),
+          WageringModule,
+        ],
   controllers: [HealthController],
   providers: [HealthService],
 })
