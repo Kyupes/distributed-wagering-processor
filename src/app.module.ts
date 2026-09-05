@@ -4,6 +4,7 @@ import mikroOrmConfig from './database/mikro-orm.config.js';
 import { HealthController } from './health/health.controller.js';
 import { HealthService } from './health/health.service.js';
 import { WageringModule } from './wagering/wagering.module.js';
+import { WalletsModule } from './wallets/wallets.module.js';
 
 @Module({
   imports:
@@ -11,6 +12,7 @@ import { WageringModule } from './wagering/wagering.module.js';
       ? []
       : [
           MikroOrmModule.forRoot({ ...mikroOrmConfig, autoLoadEntities: true }),
+          WalletsModule,
           WageringModule,
         ],
   controllers: [HealthController],
