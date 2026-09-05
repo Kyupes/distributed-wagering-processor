@@ -3,6 +3,7 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module.js';
+import { configureHttpApplication } from './../src/http/configure-http-application.js';
 
 describe('Health endpoint (e2e)', () => {
   let app: INestApplication<App>;
@@ -13,6 +14,7 @@ describe('Health endpoint (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    configureHttpApplication(app);
     await app.init();
   });
 

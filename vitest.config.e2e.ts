@@ -7,5 +7,8 @@ export default defineConfig({
     globals: true,
     root: './',
     include: ['**/*.e2e-spec.ts'],
+    // Database-backed suites truncate shared tables between cases. Run files in
+    // sequence; concurrency behavior is exercised explicitly inside integration tests.
+    fileParallelism: false,
   },
 });
