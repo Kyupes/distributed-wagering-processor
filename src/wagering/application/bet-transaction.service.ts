@@ -4,6 +4,7 @@ import { Injectable } from '@nestjs/common';
 import { InsufficientFundsError } from '../domain/insufficient-funds.error.js';
 import { Money, MoneyProps } from '../domain/money.js';
 import { Wallet } from '../domain/wallet.js';
+import { WalletLedgerEntry } from '../domain/wallet-ledger-entry.js';
 import { OutboxMessageEntity } from '../persistence/outbox-message.entity.js';
 import { WalletLedgerEntryEntity } from '../persistence/wallet-ledger-entry.entity.js';
 import {
@@ -150,17 +151,27 @@ export class BetTransactionService {
       transaction.balanceAfter = wallet.balance.toString();
       transaction.processedAt = new Date();
 
+      const ledger = WalletLedgerEntry.create({
+        id: randomUUID(),
+        walletId: walletRecord.id,
+        transactionId: transaction.id,
+        direction: 'DEBIT',
+        money,
+        balanceBefore,
+        balanceAfter: wallet.balance,
+        createdAt: new Date(),
+      });
       em.persist(
         em.create(WalletLedgerEntryEntity, {
-          id: randomUUID(),
-          walletId: walletRecord.id,
-          transactionId: transaction.id,
-          direction: 'DEBIT',
-          amount: money.toString(),
-          currency: money.currency,
-          balanceBefore: balanceBefore.toString(),
-          balanceAfter: wallet.balance.toString(),
-          createdAt: new Date(),
+          id: ledger.id,
+          walletId: ledger.walletId,
+          transactionId: ledger.transactionId,
+          direction: ledger.direction,
+          amount: ledger.money.toString(),
+          currency: ledger.money.currency,
+          balanceBefore: ledger.balanceBefore.toString(),
+          balanceAfter: ledger.balanceAfter.toString(),
+          createdAt: ledger.createdAt,
         }),
       );
       await this.hooks.afterLedgerPersisted?.();
