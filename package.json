@@ -20,6 +20,7 @@
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
+    "test:integration": "bun run build && vitest run --config ./vitest.config.integration.ts",
     "migration:create": "mikro-orm migration:create",
     "migration:up": "mikro-orm migration:up",
     "migration:down": "mikro-orm migration:down",
@@ -27,6 +28,7 @@
   },
   "dependencies": {
     "@mikro-orm/core": "^7.1.15",
+    "@mikro-orm/decorators": "^7.1.15",
     "@mikro-orm/migrations": "^7.1.15",
     "@mikro-orm/nestjs": "^7.1.0",
     "@mikro-orm/postgresql": "^7.1.15",
