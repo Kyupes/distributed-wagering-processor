@@ -2,9 +2,9 @@
 
 ## Scope
 
-The implemented vertical slices are wallet creation and `BET`. SQS consumption,
-inbox handling, outbox publishing, and the other wagering transaction kinds are
-still deferred.
+The implemented vertical slices are wallet creation, `BET`, and the required
+wallet, ledger, and transaction read API. SQS consumption, inbox handling,
+outbox publishing, and the other wagering transaction kinds are still deferred.
 
 ## Money and domain rules
 
@@ -140,9 +140,53 @@ ledger arithmetic, transaction shape, foreign keys, and ledger immutability.
 Controllers only pass validated transport data to application services and map
 known outcomes to the HTTP vocabulary above.
 
+## Read API and public representations
+
+Read operations live in query services rather than controllers. Controllers
+remain responsible for HTTP parameters and error status codes; query services
+coordinate PostgreSQL reads and convert persistence records into public response
+objects. This prevents a database entity from accidentally becoming an API
+contract and makes it possible to change storage details without changing every
+client.
+
+Wallet responses contain the wallet ID, player ID, current `Money`, currency,
+version, and ISO-8601 creation/update timestamps. Ledger entries expose their
+direction, transaction ID, `Money`, before/after balances, and creation time.
+Both transaction lookup routes call the same query service and mapper, so lookup
+by internal ID and lookup by `(providerId, externalTransactionId)` cannot drift
+into different response formats. Transaction responses omit internal values such
+as `payloadHash`, while including identifiers, kind, status, money, resulting
+balance, failure code, and timestamps. Reference fields are returned as `null`
+until reference-based transaction kinds are implemented.
+
+The ledger is ordered newest first by `(created_at DESC, id DESC)`. The UUID is a
+deterministic tie-breaker when two entries have the same timestamp. Pages use
+keyset pagination: the next query asks for rows strictly older than the final
+`(created_at, id)` pair from the current page. Unlike database offsets, inserting
+a newer entry cannot shift already-read rows and cause duplicates. PostgreSQL has
+a matching `(wallet_id, created_at DESC, id DESC)` index, so the API does not load
+the full ledger or repeatedly scan skipped rows.
+
+Clients receive an opaque base64url cursor containing version 1, the timestamp,
+and entry ID. Decoding verifies canonical base64url, the exact JSON shape, an
+ISO-8601 timestamp, a supported cursor version, and a UUID. Invalid cursors return
+`400 INVALID_CURSOR`; versioning lets a future implementation change cursor
+contents deliberately rather than silently misreading old cursors.
+
+The ledger page size defaults to 50 and is capped at 100. Fetching one extra row
+determines whether `nextCursor` should be returned without counting or loading
+the complete ledger.
+
+Focused PostgreSQL-backed checks currently cover wallet lookup, identical public
+transaction representations through both routes, transaction not found, cursor
+rejection, and pagination continuation after a newer entry is inserted. Deferred
+hardening includes large-ledger performance measurements, randomized multi-page
+walks, concurrent inserts with deliberately equal timestamps, every path/query
+validation combination, and database-failure checks for each read endpoint.
+
 ## Intentionally outside the current slice
 
 `WIN`, `LOSS`, `REFUND`, `ROLLBACK`, SQS, inbox processing, outbox publishing,
-wallet and transaction queries, authentication, and readiness checks are not
-implemented yet. `OPENING` remains internal, and unsupported public transaction
-kinds are rejected before the BET service is called.
+reconciliation, authentication, and readiness checks are not implemented yet.
+`OPENING` remains internal, and unsupported public transaction kinds are rejected
+before the BET service is called.
