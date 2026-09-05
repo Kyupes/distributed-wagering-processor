@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { LockMode, MikroORM } from '@mikro-orm/postgresql';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { InsufficientFundsError } from '../domain/insufficient-funds.error.js';
 import { Money, MoneyProps } from '../domain/money.js';
 import { Wallet } from '../domain/wallet.js';
@@ -37,8 +37,24 @@ export interface BetTransactionHooks {
 
 export class IdempotencyConflictError extends Error {
   constructor() {
-    super('The idempotency key has already been used with a different payload.');
+    super(
+      'The idempotency key has already been used with a different payload.',
+    );
     this.name = 'IdempotencyConflictError';
+  }
+}
+
+export class WalletNotFoundError extends Error {
+  constructor() {
+    super('The requested wallet does not exist.');
+    this.name = 'WalletNotFoundError';
+  }
+}
+
+export class WalletPlayerMismatchError extends Error {
+  constructor() {
+    super('The wallet does not belong to the supplied player.');
+    this.name = 'WalletPlayerMismatchError';
   }
 }
 
@@ -46,6 +62,7 @@ export class IdempotencyConflictError extends Error {
 export class BetTransactionService {
   constructor(
     private readonly orm: MikroORM,
+    @Optional()
     private readonly hooks: BetTransactionHooks = {},
   ) {}
 
@@ -54,11 +71,14 @@ export class BetTransactionService {
     const payloadHash = hashPayload(command);
 
     return this.orm.em.fork().transactional(async (em) => {
-      const walletRecord = await em.findOneOrFail(
+      const walletRecord = await em.findOne(
         WalletEntity,
         { id: command.walletId },
         { lockMode: LockMode.PESSIMISTIC_WRITE },
       );
+      if (!walletRecord) {
+        throw new WalletNotFoundError();
+      }
       const existing = await em.findOne(WagerTransactionEntity, {
         idempotencyKey: command.idempotencyKey,
       });
@@ -80,14 +100,17 @@ export class BetTransactionService {
       }
 
       if (walletRecord.playerId !== command.playerId) {
-        throw new Error('The wallet does not belong to the supplied player.');
+        throw new WalletPlayerMismatchError();
       }
 
       const wallet = Wallet.rehydrate({
         id: walletRecord.id,
         playerId: walletRecord.playerId,
         currency: walletRecord.currency,
-        balance: Money.from({ amount: walletRecord.balance, currency: walletRecord.currency }),
+        balance: Money.from({
+          amount: walletRecord.balance,
+          currency: walletRecord.currency,
+        }),
         version: walletRecord.version,
       });
       const balanceBefore = wallet.balance;
