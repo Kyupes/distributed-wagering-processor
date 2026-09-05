@@ -3,8 +3,6 @@ import { MikroORM } from '@mikro-orm/postgresql';
 import mikroOrmConfig from '../../src/database/mikro-orm.config.js';
 import { BetTransactionService } from '../../src/wagering/application/bet-transaction.service.js';
 import { IdempotencyConflictError } from '../../src/wagering/application/bet-transaction.service.js';
-import { OutboxMessageEntity } from '../../src/wagering/persistence/outbox-message.entity.js';
-import { WalletLedgerEntryEntity } from '../../src/wagering/persistence/wallet-ledger-entry.entity.js';
 import { WagerTransactionEntity } from '../../src/wagering/persistence/wager-transaction.entity.js';
 import { WalletEntity } from '../../src/wagering/persistence/wallet.entity.js';
 
@@ -20,10 +18,9 @@ describe('BET transaction integration', () => {
 
   beforeEach(async () => {
     const em = orm.em.fork();
-    await em.nativeDelete(OutboxMessageEntity, {});
-    await em.nativeDelete(WalletLedgerEntryEntity, {});
-    await em.nativeDelete(WagerTransactionEntity, {});
-    await em.nativeDelete(WalletEntity, {});
+    await em.getConnection().execute(
+      'truncate table "outbox_messages", "wallet_ledger_entries", "wager_transactions", "wallets";',
+    );
   });
 
   afterAll(async () => {

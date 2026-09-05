@@ -42,7 +42,7 @@ export class WagerTransactionEntity {
   currency!: string;
 
   @Property({ type: 'string', length: 16 })
-  kind!: 'BET';
+  kind!: 'BET' | 'OPENING';
 
   @Property({ type: 'string', length: 16 })
   status!: WagerTransactionStatus;

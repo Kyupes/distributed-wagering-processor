@@ -333,16 +333,14 @@
           "primary": false,
           "nullable": false,
           "unique": false,
-          "length": null,
+          "length": 16,
           "precision": null,
           "scale": null,
           "default": null,
           "comment": null,
           "collation": null,
-          "enumItems": [
-            "BET"
-          ],
-          "mappedType": "enum"
+          "enumItems": [],
+          "mappedType": "string"
         },
         "payload_hash": {
           "name": "payload_hash",
@@ -516,9 +514,9 @@
         },
         {
           "name": "wager_transactions_kind_check",
-          "expression": "\"kind\" in ('BET')",
-          "definition": "check (\"kind\" in ('BET'))",
-          "columnName": "kind"
+          "expression": "(kind = 'BET'::text) OR ((kind = 'OPENING'::text) AND (status = 'PROCESSED'::text) AND (provider_id = '__internal__'::text) AND (round_id = '__opening__'::text) AND (game_id = '__internal__'::text))",
+          "definition": "CHECK ((((kind)::text = 'BET'::text) OR (((kind)::text = 'OPENING'::text) AND ((status)::text = 'PROCESSED'::text) AND ((provider_id)::text = '__internal__'::text) AND ((round_id)::text = '__opening__'::text) AND ((game_id)::text = '__internal__'::text))))",
+          "columnName": "game_id"
         },
         {
           "name": "wager_transactions_status_check",
@@ -732,19 +730,30 @@
           "columnName": "amount"
         },
         {
+          "name": "wallet_ledger_entries_arithmetic",
+          "expression": "((direction = 'DEBIT'::text) AND (balance_after = (balance_before - amount))) OR ((direction = 'CREDIT'::text) AND (balance_after = (balance_before + amount)))",
+          "definition": "CHECK (((((direction)::text = 'DEBIT'::text) AND (balance_after = (balance_before - amount))) OR (((direction)::text = 'CREDIT'::text) AND (balance_after = (balance_before + amount)))))",
+          "columnName": "amount"
+        },
+        {
           "name": "wallet_ledger_entries_balance_non_negative",
           "expression": "balance_after >= 0",
           "definition": "CHECK ((balance_after >= (0)::numeric))",
           "columnName": "balance_after"
-        },
-        {
-          "name": "wallet_ledger_entries_debit_arithmetic",
-          "expression": "(direction = 'DEBIT'::text) AND (balance_after = (balance_before - amount))",
-          "definition": "CHECK ((((direction)::text = 'DEBIT'::text) AND (balance_after = (balance_before - amount))))",
-          "columnName": "amount"
         }
       ],
-      "triggers": [],
+      "triggers": [
+        {
+          "name": "wallet_ledger_entries_immutable",
+          "timing": "before",
+          "events": [
+            "delete",
+            "update"
+          ],
+          "forEach": "row",
+          "body": ""
+        }
+      ],
       "foreignKeys": {
         "wallet_ledger_entries_transaction_fk": {
           "columnNames": [

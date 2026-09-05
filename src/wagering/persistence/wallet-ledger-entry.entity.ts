@@ -12,7 +12,7 @@ export class WalletLedgerEntryEntity {
   transactionId!: string;
 
   @Property({ type: 'string', length: 6 })
-  direction!: 'DEBIT';
+  direction!: 'CREDIT' | 'DEBIT';
 
   @Property({ type: 'string', columnType: 'numeric(20,2)' })
   amount!: string;
