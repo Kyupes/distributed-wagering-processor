@@ -59,4 +59,16 @@ export class Wallet {
     this._balance = this._balance.subtract(amount);
     this._version += 1;
   }
+
+  credit(amount: Money): void {
+    if (amount.currency !== this.currency) {
+      throw new Error('Wallet and credit currencies must match.');
+    }
+    if (amount.isZero()) {
+      return;
+    }
+
+    this._balance = this._balance.add(amount);
+    this._version += 1;
+  }
 }

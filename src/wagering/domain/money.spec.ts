@@ -14,4 +14,18 @@ describe('Money', () => {
       expect(() => Money.from({ amount, currency: 'BRL' })).toThrow();
     },
   );
+
+  it.each(['brl', 'BR', 'BRLL', '12$'])(
+    'rejects invalid currency values (%s)',
+    (currency) => {
+      expect(() => Money.from({ amount: '10.00', currency })).toThrow();
+    },
+  );
+
+  it('accepts BRL as a supported currency', () => {
+    expect(Money.from({ amount: '10.00', currency: 'BRL' }).toJSON()).toEqual({
+      amount: '10.00',
+      currency: 'BRL',
+    });
+  });
 });

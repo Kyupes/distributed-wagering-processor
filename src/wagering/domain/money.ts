@@ -3,6 +3,13 @@ export interface MoneyProps {
   currency: string;
 }
 
+export class InvalidMoneyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidMoneyError';
+  }
+}
+
 export class Money {
   private constructor(
     private readonly cents: bigint,
@@ -11,11 +18,13 @@ export class Money {
 
   static from({ amount, currency }: MoneyProps): Money {
     if (!/^(0|[1-9]\d*)\.\d{2}$/.test(amount)) {
-      throw new Error('Amount must be a non-negative decimal with exactly two places.');
+      throw new InvalidMoneyError(
+        'Amount must be a non-negative decimal with exactly two places.',
+      );
     }
 
     if (!/^[A-Z]{3}$/.test(currency)) {
-      throw new Error('Currency must be an ISO-4217 uppercase code.');
+      throw new InvalidMoneyError('Currency must be an ISO-4217 uppercase code.');
     }
 
     const [whole, fraction] = amount.split('.');
@@ -42,6 +51,10 @@ export class Money {
   isLessThan(other: Money): boolean {
     this.assertSameCurrency(other);
     return this.cents < other.cents;
+  }
+
+  isZero(): boolean {
+    return this.cents === 0n;
   }
 
   equals(other: Money): boolean {

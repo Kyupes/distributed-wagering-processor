@@ -30,4 +30,41 @@ describe('Wallet', () => {
       wallet.debit(Money.from({ amount: '100.01', currency: 'BRL' })),
     ).toThrow(InsufficientFundsError);
   });
+
+  it('opens with the supplied balance and version 1', () => {
+    const wallet = Wallet.open({
+      id: 'wallet-1',
+      playerId: 'player-1',
+      initialBalance: Money.from({ amount: '100.00', currency: 'BRL' }),
+    });
+
+    expect(wallet.balance.toString()).toBe('100.00');
+    expect(wallet.version).toBe(1);
+  });
+
+  it('credits the wallet and increments its version', () => {
+    const wallet = Wallet.open({
+      id: 'wallet-1',
+      playerId: 'player-1',
+      initialBalance: Money.zero('BRL'),
+    });
+
+    wallet.credit(Money.from({ amount: '30.00', currency: 'BRL' }));
+
+    expect(wallet.balance.toString()).toBe('30.00');
+    expect(wallet.version).toBe(2);
+  });
+
+  it('does not increment the version for a zero-value credit', () => {
+    const wallet = Wallet.open({
+      id: 'wallet-1',
+      playerId: 'player-1',
+      initialBalance: Money.zero('BRL'),
+    });
+
+    wallet.credit(Money.zero('BRL'));
+
+    expect(wallet.balance.toString()).toBe('0.00');
+    expect(wallet.version).toBe(1);
+  });
 });
