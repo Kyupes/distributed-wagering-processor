@@ -110,10 +110,11 @@ describe('POST /wagering/transactions (e2e)', () => {
 
   it.each([
     ['missing kind', { kind: undefined }],
-    ['unsupported WIN kind', { kind: 'WIN' }],
+    ['unsupported REFUND kind', { kind: 'REFUND' }],
+    ['unsupported ROLLBACK kind', { kind: 'ROLLBACK' }],
     ['internal OPENING kind', { kind: 'OPENING' }],
   ])(
-    'rejects %s without invoking BET processing',
+    'rejects %s without invoking transaction processing',
     async (_scenario, overrides) => {
       const wallet = await createWallet();
       const before = await orm.em.fork().count(WagerTransactionEntity);
