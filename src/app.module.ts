@@ -3,6 +3,7 @@ import { MikroOrmModule } from '@mikro-orm/nestjs';
 import mikroOrmConfig from './database/mikro-orm.config.js';
 import { HealthController } from './health/health.controller.js';
 import { HealthService } from './health/health.service.js';
+import { SqsModule } from './messaging/sqs/sqs.module.js';
 import { WageringModule } from './wagering/wagering.module.js';
 import { WalletsModule } from './wallets/wallets.module.js';
 
@@ -12,6 +13,7 @@ import { WalletsModule } from './wallets/wallets.module.js';
       ? []
       : [
           MikroOrmModule.forRoot({ ...mikroOrmConfig, autoLoadEntities: true }),
+          SqsModule,
           WalletsModule,
           WageringModule,
         ],
