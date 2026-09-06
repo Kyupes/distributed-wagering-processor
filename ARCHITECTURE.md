@@ -2,9 +2,9 @@
 
 ## Scope
 
-The implemented vertical slices are wallet creation, `BET`, `WIN`, `LOSS`, the
-required read API, and wallet reconciliation. SQS consumption, inbox handling,
-outbox publishing, and reference-based wagering transactions are still deferred.
+The implemented vertical slices are wallet creation, all public wagering kinds,
+reference resolution and retry, the required read API, and wallet reconciliation.
+SQS consumption, inbox handling, and outbox publishing are still deferred.
 
 ## Money and domain rules
 
@@ -22,7 +22,7 @@ arithmetic check.
 
 The shared wagering application service opens one
 `EntityManager.transactional()` block and locks its wallet row with
-`SELECT ... FOR UPDATE`. This serializes BET, WIN, and LOSS operations for one
+`SELECT ... FOR UPDATE`. This serializes every financial operation for one
 wallet while allowing different wallet rows to proceed independently. The
 database transaction contains the wager transaction, any wallet update, any
 ledger entry, and all selected outbox messages.
@@ -30,19 +30,24 @@ ledger entry, and all selected outbox messages.
 ## Idempotency and events
 
 The idempotency key and a SHA-256 hash of the business payload, including its
-transaction kind, are stored with the wager transaction. An identical retry
-returns the originally observed balance; changing BET to WIN or LOSS with the
-same key is a payload conflict rather than a second operation.
+transaction kind and any supplied external reference, are stored with the wager
+transaction. The optional reference field is omitted from the canonical object
+when absent, preserving hashes created before reference support. An identical
+retry returns the stored result; changing kind or reference with the same key is
+a payload conflict rather than a second operation.
 
 One processor owns the shared workflow: parsing Money, locking and validating
-the wallet, checking idempotency, persisting the transaction, and mapping the
-result. A small kind-specific decision applies one of three effects:
+the wallet, checking idempotency, resolving references, persisting the
+transaction, and mapping the result. A small kind-specific decision applies the
+financial effect:
 
-| Kind   | Wallet/version effect          | Ledger   | Outbox events                                       |
-| ------ | ------------------------------ | -------- | --------------------------------------------------- |
-| `BET`  | Debit and increment on success | `DEBIT`  | `WagerTransactionProcessed`, `WalletBalanceChanged` |
-| `WIN`  | Credit and increment           | `CREDIT` | `WagerTransactionProcessed`, `WalletBalanceChanged` |
-| `LOSS` | No balance or version change   | none     | `WagerTransactionProcessed`                         |
+| Kind       | Wallet/version effect          | Ledger              | Outbox events                                       |
+| ---------- | ------------------------------ | ------------------- | --------------------------------------------------- |
+| `BET`      | Debit and increment on success | `DEBIT`             | `WagerTransactionProcessed`, `WalletBalanceChanged` |
+| `WIN`      | Credit and increment           | `CREDIT`            | `WagerTransactionProcessed`, `WalletBalanceChanged` |
+| `LOSS`     | No balance or version change   | none                | `WagerTransactionProcessed`                         |
+| `REFUND`   | Credit a referenced BET        | `CREDIT`            | `WagerTransactionProcessed`, `WalletBalanceChanged` |
+| `ROLLBACK` | Inverse of its reference       | `CREDIT` or `DEBIT` | `WagerTransactionProcessed`, `WalletBalanceChanged` |
 
 An insufficient-funds BET remains an auditable `REJECTED` transaction with a
 `WagerTransactionRejected` event. LOSS has no ledger entry because a ledger is
@@ -55,21 +60,44 @@ A positive initial balance is real money entering a wallet. Representing that
 change as an internal `OPENING` transaction gives it the same audit chain as a
 BET: transaction, ledger entry, and durable outbox events. The internal row uses
 a reserved `__internal__` provider namespace and a key derived from the wallet
-ID. The public wagering endpoint requires callers to state `kind` as `BET`,
-`WIN`, or `LOSS`. The DTO rejects `OPENING`, `REFUND`, and `ROLLBACK`, so callers
-cannot submit an internal operation or imply that an unimplemented reference
-operation has been processed.
+ID. The public wagering endpoint accepts `BET`, `WIN`, `LOSS`, `REFUND`, and
+`ROLLBACK`; `OPENING` remains excluded from the DTO and database rules for public
+rows.
 
-PostgreSQL permits only `BET`, `WIN`, `LOSS`, and `OPENING` at this stage. It also
-requires an `OPENING` row to be processed and carry the reserved internal
-markers. This is more restrictive than accepting every future enum value before
-its rules exist.
+PostgreSQL permits the five public kinds and `OPENING`, and still requires an
+`OPENING` row to be processed with reserved internal markers. `REFUND` and
+`ROLLBACK` require `referenceExternalTransactionId`; `WIN` accepts it optionally
+to associate a processed BET; `BET`, `LOSS`, and `OPENING` reject it.
 
-Reference fields are deliberately absent from the public DTO. Strict request
-validation therefore rejects `referenceExternalTransactionId`, including on a
-WIN, rather than accepting and silently ignoring it. Reference resolution,
-out-of-order handling, REFUND, and ROLLBACK should be implemented together in a
-later slice because they share important ownership and reversal rules.
+## Reference validation, reversal, and retry
+
+References resolve through the provider-scoped unique identity
+`(provider_id, external_transaction_id)`. A resolved reference must match the
+player, wallet, currency, and round of the new transaction. `WIN` and `REFUND`
+accept only a processed `BET`; `ROLLBACK` accepts a processed `BET`, `WIN`, or
+`REFUND`. Amounts must match exactly. Invalid ownership, type, amount, duplicate
+reversal, and reversal overdraft are terminal, auditable rejections with stable
+failure codes and no ledger entry.
+
+`REFUND` credits the referenced BET amount. A `ROLLBACK` of a BET credits, while
+a rollback of a WIN or REFUND debits. The wallet row lock protects the check and
+mutation. A partial unique index on `(reference_transaction_id, kind)` for
+processed REFUND/ROLLBACK rows repeats the one-reversal-per-type guarantee at the
+database boundary. The reference UUID also has a self-referencing foreign key.
+
+An explicitly named reference that does not exist produces `PENDING_REFERENCE`,
+stores the observed balance, schedules the first retry after five seconds, and
+adds `WagerTransactionPendingReference` to the outbox in the same SQL
+transaction. The scheduled worker polls once per second by default, claims due
+rows with `FOR UPDATE SKIP LOCKED`, and then locks the wallet before resolving or
+applying them. These row locks let multiple application instances run the worker
+without applying one pending transaction twice.
+
+Retries use exponential delays from a five-second base. Eight failed resolution
+attempts or an age of 24 hours, whichever comes first, produces a terminal
+`REFERENCE_NOT_FOUND` rejection and outbox event. The interval is configurable
+with `REFERENCE_WORKER_INTERVAL_MS`; tests disable the timer and invoke the same
+processor explicitly.
 
 ## Zero-balance interpretation
 
@@ -143,10 +171,13 @@ database messages are never returned.
 | Wallet belongs to another player                |  409 | `WALLET_PLAYER_MISMATCH`     | Correct the identifiers first              |
 | Wallet does not exist                           |  404 | `WALLET_NOT_FOUND`           | Retry only after the wallet exists         |
 | BET rejected for insufficient funds             |  422 | `BUSINESS_RULE_REJECTED`     | The result is terminal for that key        |
+| Accepted while waiting for a reference          |  202 | successful response body     | Resolution continues asynchronously        |
+| Invalid or unsafe reference/reversal            |  422 | `BUSINESS_RULE_REJECTED`     | The result is terminal for that key        |
 | Connection, deadlock, or lock timeout           |  503 | `INFRASTRUCTURE_UNAVAILABLE` | Retry with the same idempotency key        |
 | Unexpected programming failure                  |  500 | `INTERNAL_ERROR`             | Investigate; no internals are exposed      |
 
-A successful new transaction and an identical replay both return 201. The replay is
+A successful new transaction and an identical replay both return 201; a pending
+reference and its replay return 202. The replay is
 distinguished by `idempotentReplay: true` and returns the original transaction
 result. Retrying a successful request with the same key is safe because
 PostgreSQL-backed idempotency prevents a second debit or credit. An insufficient-funds
@@ -178,8 +209,8 @@ Both transaction lookup routes call the same query service and mapper, so lookup
 by internal ID and lookup by `(providerId, externalTransactionId)` cannot drift
 into different response formats. Transaction responses omit internal values such
 as `payloadHash`, while including identifiers, kind, status, money, resulting
-balance, failure code, and timestamps. Reference fields are returned as `null`
-until reference-based transaction kinds are implemented.
+balance, failure code, timestamps, and persisted external/internal reference
+identifiers. Unreferenced transactions return those fields as `null`.
 
 The ledger is ordered newest first by `(created_at DESC, id DESC)`. The UUID is a
 deterministic tie-breaker when two entries have the same timestamp. Pages use
@@ -274,9 +305,7 @@ implemented in this slice.
 
 ## Intentionally outside the current slice
 
-`REFUND`, `ROLLBACK`, reference resolution, SQS message consumption, inbox
-processing, outbox publishing, authentication, scheduled reconciliation, and
-operational metrics are not implemented yet. `OPENING` remains internal, and
-unsupported public transaction kinds and reference fields are rejected before
-the wagering service is called. The SQS client and queues exist only as readiness
-and future messaging foundations; consumption and publication remain deferred.
+SQS message consumption, inbox processing, outbox publishing, authentication,
+scheduled reconciliation, and operational metrics are not implemented yet.
+`OPENING` remains internal. The SQS client and queues exist only as readiness and
+future messaging foundations; consumption and publication remain deferred.
