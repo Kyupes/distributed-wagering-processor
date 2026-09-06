@@ -18,3 +18,6 @@ process.env.SQS_MAIN_QUEUE_NAME =
   process.env.TEST_SQS_MAIN_QUEUE_NAME ?? 'wager-transactions.fifo';
 process.env.SQS_DLQ_QUEUE_NAME =
   process.env.TEST_SQS_DLQ_QUEUE_NAME ?? 'wager-transactions-dlq.fifo';
+
+// Dependency-backed suites invoke reference resolution explicitly where needed.
+process.env.REFERENCE_WORKER_ENABLED = 'false';
