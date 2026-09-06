@@ -25,6 +25,29 @@ bun run start:dev
 and both required SQS queues. `GET /health` remains a compatibility alias for
 liveness.
 
+`POST /wagering/transactions` accepts `BET`, `WIN`, and `LOSS`. A WIN credits the
+wallet; a LOSS records the game outcome without changing its balance. Both use
+the same request shape and required `Idempotency-Key` header already documented
+for BET. `OPENING`, `REFUND`, `ROLLBACK`, and reference fields remain unavailable
+through the public endpoint.
+
+## Dependency-backed tests
+
+Start the host-facing development dependencies, then run the suites without
+setting shell variables manually:
+
+```powershell
+docker compose up -d postgres localstack
+bun run test:integration
+bun run test:e2e
+```
+
+Vitest explicitly uses PostgreSQL at `localhost:5432`, LocalStack at
+`http://localhost:4566`, region `us-east-1`, fake `test` credentials, and the two
+documented FIFO queue names. Production configuration is not given LocalStack
+defaults. An isolated stack can override these test-only values through
+`TEST_DATABASE_*`, `TEST_SQS_ENDPOINT`, and `TEST_AWS_*` variables.
+
 ## Migrations
 
 ```powershell
