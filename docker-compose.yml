@@ -1,17 +1,40 @@
 services:
-  api:
+  migrate:
+    image: distributed-wagering-processor:local
     build: .
-    environment:
-      PORT: 3000
+    command: ['bun', 'run', 'migration:up:prod']
+    environment: &application-environment
       DATABASE_HOST: postgres
       DATABASE_PORT: 5432
       DATABASE_NAME: ${DATABASE_NAME:-wagering}
       DATABASE_USER: ${DATABASE_USER:-postgres}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD:-postgres}
-    ports:
-      - "3000:3000"
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${LOCALSTACK_AWS_ACCESS_KEY_ID:-test}
+      AWS_SECRET_ACCESS_KEY: ${LOCALSTACK_AWS_SECRET_ACCESS_KEY:-test}
+      SQS_ENDPOINT: ${SQS_DOCKER_ENDPOINT:-http://localstack:4566}
+      SQS_MAIN_QUEUE_NAME: ${SQS_MAIN_QUEUE_NAME:-wager-transactions.fifo}
+      SQS_DLQ_QUEUE_NAME: ${SQS_DLQ_QUEUE_NAME:-wager-transactions-dlq.fifo}
+      READINESS_TIMEOUT_MS: ${READINESS_TIMEOUT_MS:-2000}
     depends_on:
       postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  api:
+    image: distributed-wagering-processor:local
+    build: .
+    environment:
+      <<: *application-environment
+      PORT: 3000
+    ports:
+      - '${API_PORT:-3000}:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      localstack:
         condition: service_healthy
     restart: unless-stopped
 
@@ -22,15 +45,41 @@ services:
       POSTGRES_USER: ${DATABASE_USER:-postgres}
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-postgres}
     ports:
-      - "5432:5432"
+      - '${POSTGRES_PORT:-5432}:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      test: ['CMD-SHELL', 'pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB']
       interval: 5s
       timeout: 5s
       retries: 10
     restart: unless-stopped
 
+  localstack:
+    image: localstack/localstack:4.8.1
+    environment:
+      SERVICES: sqs
+      AWS_DEFAULT_REGION: ${AWS_REGION:-us-east-1}
+      SQS_MAIN_QUEUE_NAME: ${SQS_MAIN_QUEUE_NAME:-wager-transactions.fifo}
+      SQS_DLQ_QUEUE_NAME: ${SQS_DLQ_QUEUE_NAME:-wager-transactions-dlq.fifo}
+      DEBUG: 0
+    ports:
+      - '${LOCALSTACK_PORT:-4566}:4566'
+    volumes:
+      - ./docker/localstack/init-sqs.sh:/etc/localstack/init/ready.d/init-sqs.sh:ro
+      - localstack_data:/var/lib/localstack
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'awslocal sqs get-queue-url --queue-name $$SQS_MAIN_QUEUE_NAME >/dev/null 2>&1 && awslocal sqs get-queue-url --queue-name $$SQS_DLQ_QUEUE_NAME >/dev/null 2>&1',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
 volumes:
   postgres_data:
+  localstack_data:

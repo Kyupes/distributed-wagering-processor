@@ -1,4 +1,6 @@
 import 'reflect-metadata';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Migrator } from '@mikro-orm/migrations';
 import { ReflectMetadataProvider } from '@mikro-orm/decorators/legacy';
 import { defineConfig } from '@mikro-orm/postgresql';
@@ -6,6 +8,9 @@ import { OutboxMessageEntity } from '../wagering/persistence/outbox-message.enti
 import { WalletLedgerEntryEntity } from '../wagering/persistence/wallet-ledger-entry.entity.js';
 import { WagerTransactionEntity } from '../wagering/persistence/wager-transaction.entity.js';
 import { WalletEntity } from '../wagering/persistence/wallet.entity.js';
+
+const configDirectory = dirname(fileURLToPath(import.meta.url));
+const projectRoot = resolve(configDirectory, '../..');
 
 export default defineConfig({
   host: process.env.DATABASE_HOST ?? 'localhost',
@@ -21,9 +26,10 @@ export default defineConfig({
   ],
   extensions: [Migrator],
   metadataProvider: ReflectMetadataProvider,
+  preferTs: process.env.NODE_ENV !== 'production',
   migrations: {
-    path: 'dist/database/migrations',
-    pathTs: 'src/database/migrations',
+    path: resolve(configDirectory, 'migrations'),
+    pathTs: resolve(projectRoot, 'src/database/migrations'),
     glob: '!(*.d).{js,ts}',
     transactional: true,
     allOrNothing: true,
