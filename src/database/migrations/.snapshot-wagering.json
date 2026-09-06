@@ -741,7 +741,8 @@
               "sort": "DESC"
             },
             {
-              "name": "id"
+              "name": "id",
+              "sort": "DESC"
             }
           ]
         }
