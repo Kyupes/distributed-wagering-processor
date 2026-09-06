@@ -6,6 +6,7 @@ export default defineConfig({
   test: {
     globals: true,
     include: ['test/**/*.integration-spec.ts'],
+    setupFiles: ['./test/setup-dependency-env.ts'],
     fileParallelism: false,
     testTimeout: 15_000,
   },
