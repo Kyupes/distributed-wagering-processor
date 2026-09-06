@@ -31,7 +31,8 @@ export interface LedgerPageResponse {
 }
 
 interface LedgerCursor {
-  version: 1;
+  version: 2;
+  walletId: string;
   createdAt: Date;
   id: string;
 }
@@ -85,7 +86,9 @@ export class WalletQueryService {
       throw new WalletQueryNotFoundError();
     }
 
-    const cursor = encodedCursor ? decodeCursor(encodedCursor) : undefined;
+    const cursor = encodedCursor
+      ? decodeCursor(encodedCursor, walletId)
+      : undefined;
     const where: FilterQuery<WalletLedgerEntryEntity> = { walletId };
     if (cursor) {
       where.$or = [
@@ -107,7 +110,12 @@ export class WalletQueryService {
       entries: pageRows.map(mapLedgerEntry),
       nextCursor:
         hasMore && last
-          ? encodeCursor({ version: 1, createdAt: last.createdAt, id: last.id })
+          ? encodeCursor({
+              version: 2,
+              walletId,
+              createdAt: last.createdAt,
+              id: last.id,
+            })
           : null,
     };
   }
@@ -129,13 +137,17 @@ function encodeCursor(cursor: LedgerCursor): string {
   return Buffer.from(
     JSON.stringify({
       version: cursor.version,
+      walletId: cursor.walletId,
       createdAt: cursor.createdAt.toISOString(),
       id: cursor.id,
     }),
   ).toString('base64url');
 }
 
-function decodeCursor(encoded: string): LedgerCursor {
+function decodeCursor(
+  encoded: string,
+  requestedWalletId: string,
+): LedgerCursor {
   try {
     if (!/^[A-Za-z0-9_-]+$/.test(encoded)) {
       throw new Error('invalid base64url');
@@ -146,13 +158,15 @@ function decodeCursor(encoded: string): LedgerCursor {
     }
     const parsed = JSON.parse(decoded.toString('utf8')) as {
       version?: unknown;
+      walletId?: unknown;
       createdAt?: unknown;
       id?: unknown;
     };
     const keys = Object.keys(parsed).sort();
     if (
-      keys.join(',') !== 'createdAt,id,version' ||
-      parsed.version !== 1 ||
+      keys.join(',') !== 'createdAt,id,version,walletId' ||
+      parsed.version !== 2 ||
+      parsed.walletId !== requestedWalletId ||
       typeof parsed.createdAt !== 'string' ||
       typeof parsed.id !== 'string' ||
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -168,7 +182,12 @@ function decodeCursor(encoded: string): LedgerCursor {
     ) {
       throw new Error('invalid cursor date');
     }
-    return { version: 1, createdAt, id: parsed.id };
+    return {
+      version: 2,
+      walletId: requestedWalletId,
+      createdAt,
+      id: parsed.id,
+    };
   } catch {
     throw new InvalidLedgerCursorError();
   }

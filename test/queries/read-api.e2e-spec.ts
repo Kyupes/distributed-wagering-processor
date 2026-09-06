@@ -42,11 +42,11 @@ describe('Read API (e2e)', () => {
     await app.close();
   });
 
-  async function createWallet() {
+  async function createWallet(playerId = 'query-player') {
     const response = await request(app.getHttpServer())
       .post('/wallets')
       .send({
-        playerId: 'query-player',
+        playerId,
         initialBalance: { amount: '100.00', currency: 'BRL' },
       });
     expect(response.status).toBe(201);
@@ -157,6 +157,22 @@ describe('Read API (e2e)', () => {
     const response = await request(app.getHttpServer())
       .get(`/wallets/${wallet.id}/ledger`)
       .query({ cursor: 'not-a-valid-cursor!' });
+
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe('INVALID_CURSOR');
+  });
+
+  it('rejects a ledger cursor issued for a different wallet', async () => {
+    const walletA = await createWallet();
+    const walletB = await createWallet('other-query-player');
+    await placeBet(walletA.id, 'wallet-bound-cursor');
+    const firstPage = await request(app.getHttpServer()).get(
+      `/wallets/${walletA.id}/ledger?limit=1`,
+    );
+
+    const response = await request(app.getHttpServer())
+      .get(`/wallets/${walletB.id}/ledger`)
+      .query({ cursor: firstPage.body.nextCursor });
 
     expect(response.status).toBe(400);
     expect(response.body.code).toBe('INVALID_CURSOR');
