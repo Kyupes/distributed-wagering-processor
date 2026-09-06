@@ -21,10 +21,10 @@
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "test:integration": "bun run build && vitest run --config ./vitest.config.integration.ts",
-    "migration:create": "mikro-orm migration:create --config ./mikro-orm.config.ts",
-    "migration:up": "mikro-orm migration:up --config ./mikro-orm.config.ts",
-    "migration:down": "mikro-orm migration:down --config ./mikro-orm.config.ts",
-    "migration:pending": "mikro-orm migration:pending --config ./mikro-orm.config.ts",
+    "migration:create": "tsx ./node_modules/@mikro-orm/cli/cli.js migration:create --config ./mikro-orm.config.ts",
+    "migration:up": "tsx ./node_modules/@mikro-orm/cli/cli.js migration:up --config ./mikro-orm.config.ts",
+    "migration:down": "tsx ./node_modules/@mikro-orm/cli/cli.js migration:down --config ./mikro-orm.config.ts",
+    "migration:pending": "tsx ./node_modules/@mikro-orm/cli/cli.js migration:pending --config ./mikro-orm.config.ts",
     "migration:up:prod": "bun ./dist/database/run-migrations.js"
   },
   "dependencies": {
