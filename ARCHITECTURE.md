@@ -167,11 +167,15 @@ a newer entry cannot shift already-read rows and cause duplicates. PostgreSQL ha
 a matching `(wallet_id, created_at DESC, id DESC)` index, so the API does not load
 the full ledger or repeatedly scan skipped rows.
 
-Clients receive an opaque base64url cursor containing version 1, the timestamp,
-and entry ID. Decoding verifies canonical base64url, the exact JSON shape, an
-ISO-8601 timestamp, a supported cursor version, and a UUID. Invalid cursors return
-`400 INVALID_CURSOR`; versioning lets a future implementation change cursor
-contents deliberately rather than silently misreading old cursors.
+Clients receive an opaque base64url cursor containing version 2, the wallet ID,
+timestamp, and entry ID. Decoding verifies canonical base64url, the exact JSON
+shape, an ISO-8601 timestamp, a supported cursor version, UUIDs, and that the
+cursor wallet matches the URL wallet. A cursor from wallet A therefore cannot be
+used to navigate wallet B's ledger. Invalid or mismatched cursors return `400
+INVALID_CURSOR`; versioning lets a future implementation change cursor contents
+deliberately rather than silently misreading old cursors. Version 1 cursors
+predate wallet binding and are intentionally rejected; clients restart pagination
+to receive a wallet-bound version 2 cursor.
 
 The ledger page size defaults to 50 and is capped at 100. Fetching one extra row
 determines whether `nextCursor` should be returned without counting or loading
@@ -184,9 +188,73 @@ hardening includes large-ledger performance measurements, randomized multi-page
 walks, concurrent inserts with deliberately equal timestamps, every path/query
 validation combination, and database-failure checks for each read endpoint.
 
+## Migration execution and Docker startup
+
+Development migration commands use `tsx` and the source configuration exported
+from the repository root. The configuration points `pathTs` and the schema
+snapshot to `src/database/migrations`, so creating a migration updates versioned
+source files without requiring an old `dist` directory.
+
+Production uses the compiled `dist/database/run-migrations.js` entry point. It
+loads the compiled configuration and migrations and does not compile TypeScript
+inside the running container. This programmatic runner also avoids the MikroORM
+CLI's TypeScript-loader selection entirely. The final image installs production
+dependencies only, so development-only `tsx` and the migration CLI are absent.
+
+Docker Compose uses the same immutable application image for a one-shot
+`migrate` service and the API. The migration service waits for healthy
+PostgreSQL. The API waits for healthy PostgreSQL, successful migration
+completion, and healthy LocalStack. A migration error gives the one-shot service
+a non-zero exit code, so Compose does not start the API against an unknown
+schema. Re-running startup on an existing volume is safe because MikroORM records
+applied migrations and only executes pending versions.
+
+## Wallet reconciliation
+
+Reconciliation is a read-only diagnostic use case. Its application service loads
+one wallet and all immutable ledger entries for that wallet, totals CREDIT and
+DEBIT amounts with `Money`, and compares the reconstructed result with the stored
+balance. It never changes either side of the comparison; an inconsistency must be
+investigated rather than silently hidden by an automatic repair.
+
+`difference.amount` is always an exact, non-negative Money magnitude.
+`differenceDirection` makes its meaning explicit: `STORED_GREATER`,
+`CALCULATED_GREATER`, or `NONE`. This preserves the existing non-negative Money
+representation while still telling monitoring or support tools which side is
+higher. The endpoint returns HTTP 200 because it calculates a report rather than
+creating a resource.
+
+The current implementation reads the complete target wallet ledger because a
+complete calculation is required. Streaming or batched reconciliation for very
+large ledgers, scheduled reconciliation, metrics, and alert delivery remain
+hardening work.
+
+## Liveness, readiness, and the SQS boundary
+
+Liveness answers only whether the Nest process can serve a request. It performs
+no PostgreSQL or SQS calls, so an external dependency outage does not cause an
+orchestrator to restart an otherwise healthy process.
+
+Readiness answers whether this instance can safely do required work. PostgreSQL
+must execute a small query, and the reusable SQS provider must resolve both the
+main FIFO queue and its dead-letter FIFO queue. Checks have short timeouts and
+return only `up` or `down`; credentials, endpoints, stack traces, and driver
+errors never enter the HTTP response. Any unavailable dependency produces HTTP
+503 `NOT_READY`.
+
+LocalStack owns local AWS emulation only. A ready-stage initialization hook
+creates `wager-transactions.fifo` and `wager-transactions-dlq.fifo`, then attaches
+the DLQ redrive policy with a maximum receive count of five. Region, endpoint,
+credentials, queue names, and readiness timeout come from environment variables.
+The Nest SQS module exports one client provider so future consumers and outbox
+publishers can reuse the same boundary; no message consumption or publication is
+implemented in this slice.
+
 ## Intentionally outside the current slice
 
-`WIN`, `LOSS`, `REFUND`, `ROLLBACK`, SQS, inbox processing, outbox publishing,
-reconciliation, authentication, and readiness checks are not implemented yet.
-`OPENING` remains internal, and unsupported public transaction kinds are rejected
-before the BET service is called.
+`WIN`, `LOSS`, `REFUND`, `ROLLBACK`, SQS message consumption, inbox processing,
+outbox publishing, authentication, scheduled reconciliation, and operational
+metrics are not implemented yet. `OPENING` remains internal, and unsupported
+public transaction kinds are rejected before the BET service is called. The SQS
+client and queues exist only as readiness and future messaging foundations;
+consumption and publication remain deferred.
