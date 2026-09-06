@@ -1,6 +1,9 @@
 import { MikroORM } from '@mikro-orm/postgresql';
 import { Injectable } from '@nestjs/common';
-import { WagerTransactionEntity } from '../persistence/wager-transaction.entity.js';
+import {
+  WagerTransactionEntity,
+  WagerTransactionKind,
+} from '../persistence/wager-transaction.entity.js';
 
 export interface TransactionResponse {
   transactionId: string;
@@ -10,7 +13,7 @@ export interface TransactionResponse {
   playerId: string;
   roundId: string;
   gameId: string;
-  kind: 'BET' | 'OPENING';
+  kind: WagerTransactionKind;
   status: string;
   money: { amount: string; currency: string };
   balanceAfter: { amount: string; currency: string } | null;

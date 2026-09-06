@@ -514,8 +514,8 @@
         },
         {
           "name": "wager_transactions_kind_check",
-          "expression": "(kind = 'BET'::text) OR ((kind = 'OPENING'::text) AND (status = 'PROCESSED'::text) AND (provider_id = '__internal__'::text) AND (round_id = '__opening__'::text) AND (game_id = '__internal__'::text))",
-          "definition": "CHECK ((((kind)::text = 'BET'::text) OR (((kind)::text = 'OPENING'::text) AND ((status)::text = 'PROCESSED'::text) AND ((provider_id)::text = '__internal__'::text) AND ((round_id)::text = '__opening__'::text) AND ((game_id)::text = '__internal__'::text))))",
+          "expression": "(kind = ANY (ARRAY['BET'::character varying, 'WIN'::character varying, 'LOSS'::character varying])) OR ((kind = 'OPENING'::text) AND (status = 'PROCESSED'::text) AND (provider_id = '__internal__'::text) AND (round_id = '__opening__'::text) AND (game_id = '__internal__'::text))",
+          "definition": "CHECK ((((kind)::text = ANY ((ARRAY['BET'::character varying, 'WIN'::character varying, 'LOSS'::character varying])::text[])) OR (((kind)::text = 'OPENING'::text) AND ((status)::text = 'PROCESSED'::text) AND ((provider_id)::text = '__internal__'::text) AND ((round_id)::text = '__opening__'::text) AND ((game_id)::text = '__internal__'::text))))",
           "columnName": "game_id"
         },
         {
@@ -741,8 +741,7 @@
               "sort": "DESC"
             },
             {
-              "name": "id",
-              "sort": "DESC"
+              "name": "id"
             }
           ]
         }

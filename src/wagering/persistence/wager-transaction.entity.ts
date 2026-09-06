@@ -6,6 +6,9 @@ export enum WagerTransactionStatus {
   Rejected = 'REJECTED',
 }
 
+export type PublicWagerTransactionKind = 'BET' | 'WIN' | 'LOSS';
+export type WagerTransactionKind = PublicWagerTransactionKind | 'OPENING';
+
 @Entity({ tableName: 'wager_transactions' })
 export class WagerTransactionEntity {
   @PrimaryKey({ type: 'uuid' })
@@ -42,12 +45,17 @@ export class WagerTransactionEntity {
   currency!: string;
 
   @Property({ type: 'string', length: 16 })
-  kind!: 'BET' | 'OPENING';
+  kind!: WagerTransactionKind;
 
   @Property({ type: 'string', length: 16 })
   status!: WagerTransactionStatus;
 
-  @Property({ type: 'string', fieldName: 'balance_after', columnType: 'numeric(20,2)', nullable: true })
+  @Property({
+    type: 'string',
+    fieldName: 'balance_after',
+    columnType: 'numeric(20,2)',
+    nullable: true,
+  })
   balanceAfter?: string;
 
   @Property({ type: 'string', fieldName: 'failure_code', nullable: true })
@@ -56,6 +64,10 @@ export class WagerTransactionEntity {
   @Property({ type: 'Date', fieldName: 'processed_at', nullable: true })
   processedAt?: Date;
 
-  @Property({ type: 'Date', fieldName: 'created_at', onCreate: () => new Date() })
+  @Property({
+    type: 'Date',
+    fieldName: 'created_at',
+    onCreate: () => new Date(),
+  })
   createdAt!: Date;
 }

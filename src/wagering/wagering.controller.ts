@@ -2,35 +2,37 @@ import { Body, Controller, HttpStatus, Post } from '@nestjs/common';
 import { ApiException } from '../http/api.exception.js';
 import { InvalidMoneyError } from './domain/money.js';
 import {
-  BetTransactionService,
   IdempotencyConflictError,
+  WagerTransactionService,
+  WalletCurrencyMismatchError,
   WalletNotFoundError,
   WalletPlayerMismatchError,
-} from './application/bet-transaction.service.js';
-import type { ProcessBetResult } from './application/bet-transaction.service.js';
-import { ProcessBetDto } from './dto/process-bet.dto.js';
+} from './application/wager-transaction.service.js';
+import type { ProcessWagerTransactionResult } from './application/wager-transaction.service.js';
+import { ProcessWagerTransactionDto } from './dto/process-wager-transaction.dto.js';
 import { IdempotencyKey, IdempotencyKeyPipe } from './idempotency-key.pipe.js';
 
 @Controller('wagering/transactions')
 export class WageringController {
-  constructor(private readonly betTransactionService: BetTransactionService) {}
+  constructor(
+    private readonly wagerTransactionService: WagerTransactionService,
+  ) {}
 
   @Post()
-  async processBet(
+  async processTransaction(
     @IdempotencyKey(IdempotencyKeyPipe) idempotencyKey: string,
-    @Body() body: ProcessBetDto,
-  ): Promise<ProcessBetResult> {
+    @Body() body: ProcessWagerTransactionDto,
+  ): Promise<ProcessWagerTransactionResult> {
     try {
-      const { kind: _publicKind, ...command } = body;
-      const result = await this.betTransactionService.process({
-        ...command,
+      const result = await this.wagerTransactionService.process({
+        ...body,
         idempotencyKey,
       });
       if (result.status === 'REJECTED') {
         throw new ApiException(
           HttpStatus.UNPROCESSABLE_ENTITY,
           'BUSINESS_RULE_REJECTED',
-          'The BET was rejected by a business rule',
+          'The wagering transaction was rejected by a business rule',
           {
             failureCode: 'INSUFFICIENT_FUNDS',
             transactionId: result.transactionId,
@@ -62,6 +64,13 @@ export class WageringController {
         throw new ApiException(
           HttpStatus.CONFLICT,
           'WALLET_PLAYER_MISMATCH',
+          error.message,
+        );
+      }
+      if (error instanceof WalletCurrencyMismatchError) {
+        throw new ApiException(
+          HttpStatus.CONFLICT,
+          'WALLET_CURRENCY_MISMATCH',
           error.message,
         );
       }

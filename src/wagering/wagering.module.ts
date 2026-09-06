@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { BetTransactionService } from './application/bet-transaction.service.js';
+import { WagerTransactionService } from './application/wager-transaction.service.js';
 import { TransactionQueryService } from './application/transaction-query.service.js';
 import { WageringController } from './wagering.controller.js';
 import { IdempotencyKeyPipe } from './idempotency-key.pipe.js';
@@ -15,10 +15,10 @@ import {
     ProviderTransactionQueryController,
   ],
   providers: [
-    BetTransactionService,
+    WagerTransactionService,
     TransactionQueryService,
     IdempotencyKeyPipe,
   ],
-  exports: [BetTransactionService],
+  exports: [WagerTransactionService],
 })
 export class WageringModule {}
