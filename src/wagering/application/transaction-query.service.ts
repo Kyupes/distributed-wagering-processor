@@ -84,8 +84,9 @@ function mapTransactionResponse(
         ? null
         : { amount: transaction.balanceAfter, currency: transaction.currency },
     failureCode: transaction.failureCode ?? null,
-    referenceExternalTransactionId: null,
-    referenceTransactionId: null,
+    referenceExternalTransactionId:
+      transaction.referenceExternalTransactionId ?? null,
+    referenceTransactionId: transaction.referenceTransactionId ?? null,
     createdAt: transaction.createdAt.toISOString(),
     processedAt: transaction.processedAt?.toISOString() ?? null,
   };

@@ -7,6 +7,7 @@ import {
   ProviderTransactionQueryController,
   TransactionQueryController,
 } from './transaction-query.controller.js';
+import { PendingReferenceWorker } from './application/pending-reference.worker.js';
 
 @Module({
   controllers: [
@@ -18,6 +19,7 @@ import {
     WagerTransactionService,
     TransactionQueryService,
     IdempotencyKeyPipe,
+    PendingReferenceWorker,
   ],
   exports: [WagerTransactionService],
 })

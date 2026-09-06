@@ -117,6 +117,7 @@ export class CreateWalletService {
       currency: initialBalance.currency,
       kind: 'OPENING',
       status: WagerTransactionStatus.Processed,
+      referenceAttempts: 0,
       balanceAfter: wallet.balance.toString(),
       processedAt: now,
       createdAt: now,

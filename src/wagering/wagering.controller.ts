@@ -1,8 +1,10 @@
-import { Body, Controller, HttpStatus, Post } from '@nestjs/common';
+import { Body, Controller, HttpStatus, Post, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiException } from '../http/api.exception.js';
 import { InvalidMoneyError } from './domain/money.js';
 import {
   IdempotencyConflictError,
+  InvalidReferenceContractError,
   WagerTransactionService,
   WalletCurrencyMismatchError,
   WalletNotFoundError,
@@ -22,19 +24,23 @@ export class WageringController {
   async processTransaction(
     @IdempotencyKey(IdempotencyKeyPipe) idempotencyKey: string,
     @Body() body: ProcessWagerTransactionDto,
+    @Res({ passthrough: true }) response: Response,
   ): Promise<ProcessWagerTransactionResult> {
     try {
       const result = await this.wagerTransactionService.process({
         ...body,
         idempotencyKey,
       });
+      if (result.status === 'PENDING_REFERENCE') {
+        response.status(HttpStatus.ACCEPTED);
+      }
       if (result.status === 'REJECTED') {
         throw new ApiException(
           HttpStatus.UNPROCESSABLE_ENTITY,
           'BUSINESS_RULE_REJECTED',
           'The wagering transaction was rejected by a business rule',
           {
-            failureCode: 'INSUFFICIENT_FUNDS',
+            failureCode: result.failureCode,
             transactionId: result.transactionId,
             balance: result.balance,
             idempotentReplay: result.idempotentReplay,
@@ -50,6 +56,13 @@ export class WageringController {
         throw new ApiException(
           HttpStatus.CONFLICT,
           'IDEMPOTENCY_CONFLICT',
+          error.message,
+        );
+      }
+      if (error instanceof InvalidReferenceContractError) {
+        throw new ApiException(
+          HttpStatus.BAD_REQUEST,
+          'INVALID_PAYLOAD',
           error.message,
         );
       }

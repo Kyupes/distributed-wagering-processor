@@ -4,6 +4,7 @@ import {
   IsIn,
   IsNotEmpty,
   IsObject,
+  IsOptional,
   IsString,
   IsUUID,
   ValidateNested,
@@ -43,8 +44,13 @@ export class ProcessWagerTransactionDto {
   gameId!: string;
 
   @IsDefined()
-  @IsIn(['BET', 'WIN', 'LOSS'])
+  @IsIn(['BET', 'WIN', 'LOSS', 'REFUND', 'ROLLBACK'])
   kind!: PublicWagerTransactionKind;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  referenceExternalTransactionId?: string;
 
   @IsDefined()
   @IsObject()

@@ -1,16 +1,21 @@
 import { Entity, PrimaryKey, Property } from '@mikro-orm/decorators/legacy';
+import { OptionalProps } from '@mikro-orm/core';
 
 export enum WagerTransactionStatus {
   Pending = 'PENDING',
+  PendingReference = 'PENDING_REFERENCE',
   Processed = 'PROCESSED',
   Rejected = 'REJECTED',
 }
 
-export type PublicWagerTransactionKind = 'BET' | 'WIN' | 'LOSS';
+export type PublicWagerTransactionKind =
+  'BET' | 'WIN' | 'LOSS' | 'REFUND' | 'ROLLBACK';
 export type WagerTransactionKind = PublicWagerTransactionKind | 'OPENING';
 
 @Entity({ tableName: 'wager_transactions' })
 export class WagerTransactionEntity {
+  [OptionalProps]?: 'referenceAttempts';
+
   @PrimaryKey({ type: 'uuid' })
   id!: string;
 
@@ -47,8 +52,32 @@ export class WagerTransactionEntity {
   @Property({ type: 'string', length: 16 })
   kind!: WagerTransactionKind;
 
-  @Property({ type: 'string', length: 16 })
+  @Property({ type: 'string', length: 32 })
   status!: WagerTransactionStatus;
+
+  @Property({
+    type: 'string',
+    fieldName: 'reference_external_transaction_id',
+    nullable: true,
+  })
+  referenceExternalTransactionId?: string;
+
+  @Property({
+    fieldName: 'reference_transaction_id',
+    type: 'uuid',
+    nullable: true,
+  })
+  referenceTransactionId?: string;
+
+  @Property({ type: 'number', fieldName: 'reference_attempts', default: 0 })
+  referenceAttempts = 0;
+
+  @Property({
+    type: 'Date',
+    fieldName: 'next_reference_attempt_at',
+    nullable: true,
+  })
+  nextReferenceAttemptAt?: Date;
 
   @Property({
     type: 'string',
