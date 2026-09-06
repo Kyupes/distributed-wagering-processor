@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   HttpStatus,
   Param,
   Post,
@@ -20,6 +21,8 @@ import {
   WalletQueryNotFoundError,
   WalletQueryService,
 } from './application/wallet-query.service.js';
+import { WalletReconciliationService } from './application/wallet-reconciliation.service.js';
+import type { WalletReconciliationResponse } from './application/wallet-reconciliation.service.js';
 import type {
   LedgerPageResponse,
   WalletResponse,
@@ -32,6 +35,7 @@ export class WalletsController {
   constructor(
     private readonly createWalletService: CreateWalletService,
     private readonly walletQueries: WalletQueryService,
+    private readonly walletReconciliation: WalletReconciliationService,
   ) {}
 
   @Post()
@@ -71,6 +75,16 @@ export class WalletsController {
   ): Promise<LedgerPageResponse> {
     return this.runWalletQuery(() =>
       this.walletQueries.getLedger(params.walletId, query.limit, query.cursor),
+    );
+  }
+
+  @Post(':walletId/reconciliation')
+  @HttpCode(HttpStatus.OK)
+  async reconcile(
+    @Param() params: WalletIdParamDto,
+  ): Promise<WalletReconciliationResponse> {
+    return this.runWalletQuery(() =>
+      this.walletReconciliation.reconcile(params.walletId),
     );
   }
 
